@@ -2,13 +2,14 @@ from datetime import datetime
 from app import db
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
+import pytz
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime,default=lambda: datetime.now(pytz.timezone('Asia/Kolkata')).date())
     
     # User profile data
     weight = db.Column(db.Float)
@@ -46,7 +47,7 @@ class CustomItem(db.Model):
     fiber = db.Column(db.Float, nullable=False)
     sugar = db.Column(db.Float, nullable=False)
     sodium = db.Column(db.Float, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime,default=lambda: datetime.now(pytz.timezone('Asia/Kolkata')).date())
     
     # Relationships
     meal_items = db.relationship('MealItem', backref='custom_item', lazy=True)
@@ -59,7 +60,7 @@ class Meal(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.String(500))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime,default=lambda: datetime.now(pytz.timezone('Asia/Kolkata')).date())
     
     # Relationships
     meal_items = db.relationship('MealItem', backref='meal', lazy=True, cascade="all, delete-orphan")
@@ -127,7 +128,8 @@ class MealItem(db.Model):
 class FoodLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    date = db.Column(db.DateTime, default=datetime.utcnow)
+    date = db.Column(db.DateTime,default=lambda: datetime.now(pytz.timezone('Asia/Kolkata')).date())
+    only_date = db.Column(db.Date, default=lambda: datetime.now(pytz.timezone('Asia/Kolkata')).date())
     meal_type = db.Column(db.String(20))  # breakfast, lunch, dinner, snack
     description = db.Column(db.String(500))
     
@@ -151,7 +153,8 @@ class FoodLog(db.Model):
 class ExerciseLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    date = db.Column(db.DateTime, default=datetime.utcnow)
+    date = db.Column(db.DateTime,default=lambda: datetime.now(pytz.timezone('Asia/Kolkata')).date())
+    only_date = db.Column(db.Date, default=lambda: datetime.now(pytz.timezone('Asia/Kolkata')).date())
     name = db.Column(db.String(100), nullable=False)
     duration = db.Column(db.Integer)  # In minutes
     calories_burned = db.Column(db.Float)

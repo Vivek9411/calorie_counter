@@ -140,16 +140,30 @@
                                             
                                             <div class="mb-3">
                                                 {{ meal_item_form.custom_item_id.label(class="form-label") }}
+                                                <div class="input-group">
+                                                    <input type="text" id="food-search-{{ meal.id }}" class="form-control" placeholder="Search food items..." autocomplete="off">
+                                                    <div id="search-results-{{ meal.id }}" class="dropdown-menu w-100"></div>
+                                                </div>
                                                 {% if meal_item_form.custom_item_id.errors %}
-                                                    {{ meal_item_form.custom_item_id(class="form-select is-invalid") }}
+                                                    {{ meal_item_form.custom_item_id(class="form-select is-invalid d-none") }}
                                                     <div class="invalid-feedback">
                                                         {% for error in meal_item_form.custom_item_id.errors %}
                                                             {{ error }}
                                                         {% endfor %}
                                                     </div>
                                                 {% else %}
-                                                    {{ meal_item_form.custom_item_id(class="form-select") }}
+                                                    {{ meal_item_form.custom_item_id(class="form-select d-none") }}
                                                 {% endif %}
+                                                <div id="selected-food-{{ meal.id }}" class="mt-2 d-none">
+                                                    <div class="card">
+                                                        <div class="card-body p-2">
+                                                            <div class="d-flex justify-content-between align-items-center">
+                                                                <span id="selected-food-name-{{ meal.id }}"></span>
+                                                                <span id="selected-food-calories-{{ meal.id }}" class="badge bg-primary"></span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
                                             
                                             <div class="mb-3">
@@ -205,6 +219,29 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .dropdown-menu.show {
+        max-height: 200px;
+        overflow-y: auto;
+        width: 100%;
+    }
+    
+    .dropdown-item {
+        white-space: normal;
+        word-wrap: break-word;
+        padding: 0.5rem 1rem;
+    }
+    
+    .selected-food-container {
+        border: 1px solid var(--bs-border-color);
+        border-radius: 0.25rem;
+        padding: 0.5rem;
+        margin-top: 0.5rem;
+    }
+</style>
 {% endblock %}
 
 {% block scripts %}

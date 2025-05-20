@@ -27,11 +27,11 @@
                 <div class="card-body p-4">
                     <div class="row mb-4">
                         <div class="col-sm-6 text-center mb-3 mb-sm-0">
-                            <div class="card bg-light border-0">
-                                <div class="card-body py-4">
+                            <div class="card bg-light border-0 text-dark">
+                                <div class="card-body py-4 ">
                                     <h5 class="mb-1">Recommended</h5>
                                     <div class="display-5 fw-bold mb-0">{{ recommendations.nutrition.calories }}</div>
-                                    <div class="text-muted">calories/day</div>
+                                    <div class="">calories/day</div>
                                 </div>
                             </div>
                         </div>
@@ -45,7 +45,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Macronutrients comparison -->
                     <h5 class="mb-3 mt-4">Macro Nutrients</h5>
                     
@@ -143,20 +143,20 @@
                 <div class="card-body p-4">
                     <div class="row mb-4">
                         <div class="col-sm-6 text-center mb-3 mb-sm-0">
-                            <div class="card bg-light border-0">
+                            <div class="card bg-light border-0 text-dark">
                                 <div class="card-body py-4">
                                     <h5 class="mb-1">Today's Activity</h5>
                                     <div class="display-5 fw-bold mb-0">{{ today_exercise.minutes }}</div>
-                                    <div class="text-muted">minutes</div>
+                                    <div class="">minutes</div>
                                 </div>
                             </div>
                         </div>
                         <div class="col-sm-6 text-center">
-                            <div class="card bg-light border-0">
+                            <div class="card bg-light border-0 text-dark">
                                 <div class="card-body py-4">
                                     <h5 class="mb-1">Calories Burned</h5>
                                     <div class="display-5 fw-bold mb-0">{{ today_exercise.calories_burned }}</div>
-                                    <div class="text-muted">calories</div>
+                                    <div class="">calories</div>
                                 </div>
                             </div>
                         </div>
@@ -230,7 +230,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="card-footer bg-light py-3">
+                <div class="card-footer bg-light py-3 text-dark">
                     <div class="d-grid">
                         <a href="{{ url_for('dashboard') }}" class="btn btn-success">
                             <i class="fas fa-plus-circle me-2"></i>Log Exercise
@@ -291,31 +291,31 @@
                 
                 <div class="col-md-6">
                     <h5 class="mb-3">Exercise Recommendations:</h5>
-                    <div class="card bg-light border-0 mb-4">
+                    <div class="card bg-light border-0 mb-4 text-dark">
                         <div class="card-body">
                             <h5 class="card-title">Weekly Exercise Goals</h5>
                             <p class="card-text">Based on your profile and goals to {{ current_user.motive }} weight:</p>
                             <ul class="list-group list-group-flush mb-3">
-                                <li class="list-group-item bg-transparent">
+                                <li class="list-group-item bg-transparent text-dark">
                                     <i class="fas fa-running text-success me-2"></i>
                                     <strong>{{ recommendations.exercise.weekly_cardio_minutes }} minutes</strong> of cardio exercise weekly
                                 </li>
-                                <li class="list-group-item bg-transparent">
+                                <li class="list-group-item bg-transparent text-dark">
                                     <i class="fas fa-dumbbell text-warning me-2"></i>
                                     <strong>{{ recommendations.exercise.weekly_strength_days }} days</strong> of strength training weekly
                                 </li>
-                                <li class="list-group-item bg-transparent">
+                                <li class="list-group-item bg-transparent text-dark">
                                     <i class="fas fa-fire-alt text-danger me-2"></i>
                                     <strong>{{ recommendations.exercise.weekly_calories_burned }} calories</strong> burned through exercise weekly
                                 </li>
                             </ul>
-                            <h6 class="card-subtitle mb-2 text-muted">Daily Goals:</h6>
+                            <h6 class="card-subtitle mb-2 ">Daily Goals:</h6>
                             <ul class="list-group list-group-flush">
-                                <li class="list-group-item bg-transparent">
+                                <li class="list-group-item bg-transparent text-dark">
                                     <i class="fas fa-running text-success me-2"></i>
                                     <strong>{{ recommendations.exercise.daily_cardio_minutes }} minutes</strong> of daily activity
                                 </li>
-                                <li class="list-group-item bg-transparent">
+                                <li class="list-group-item bg-transparent text-dark">
                                     <i class="fas fa-fire-alt text-danger me-2"></i>
                                     <strong>{{ recommendations.exercise.daily_calories_burned }} calories</strong> burned daily
                                 </li>

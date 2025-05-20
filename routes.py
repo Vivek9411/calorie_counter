@@ -1,16 +1,23 @@
 from flask import render_template, redirect, url_for, flash, request, jsonify, session
 from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy import func, cast, Date
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from app import app, db
 from models import User, CustomItem, Meal, MealItem, FoodLog, ExerciseLog
-from forms import RegistrationForm, LoginForm, NaturalLanguageInputForm, CustomItemForm, MealForm, MealItemForm, ProfileForm
+from forms import RegistrationForm, LoginForm, NaturalLanguageInputForm_Food, CustomItemForm, MealForm, MealItemForm, \
+    ProfileForm, NaturalLanguageInputForm_Exercise
 from nlp_processor import NLPProcessor
 import json
+import pytz
 from werkzeug.security import generate_password_hash
 
 # Initialize NLP Processor
 nlp_processor = NLPProcessor()
+tz_ist = pytz.timezone('Asia/Kolkata')
+# Custom Jinja filters
+@app.template_filter('round_up_to_nearest')
+def round_up_to_nearest(value, base):
+    return ((value + base - 1) // base) * base
 
 # Home route
 @app.route('/')
@@ -77,30 +84,90 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    form = NaturalLanguageInputForm()
+    form_food = NaturalLanguageInputForm_Food()
+    form_exercise = NaturalLanguageInputForm_Exercise()
     
     # Get today's date and the date range for past week and month
-    today = datetime.now().date()
+    tz_ist = pytz.timezone('Asia/Kolkata')
+    time = datetime.now(tz_ist).time()
+    today = datetime.now(tz_ist).date()
     week_ago = today - timedelta(days=7)
     month_ago = today - timedelta(days=30)
+    print(time)
+    print(today)
+    print(week_ago)
+    print(month_ago)
     
+    # Get user's calorie requirements
+    user_has_complete_profile = all([
+        current_user.weight, 
+        current_user.height, 
+        current_user.age, 
+        current_user.gender, 
+        current_user.activity_level, 
+        current_user.motive
+    ])
+    
+    if user_has_complete_profile:
+        from nutrition_calculator import get_full_recommendations
+        recommendations = get_full_recommendations(current_user)
+        target_calories = recommendations['nutrition']['calories']
+        target_protein = recommendations['nutrition']['protein']
+        target_carbs = recommendations['nutrition']['carbs']
+        target_fiber = recommendations['nutrition']['fiber']
+        target_sugar = recommendations['nutrition']['sugar']
+        target_sodium = recommendations['nutrition']['sodium']
+    else:
+        # Default values if user hasn't completed their profile
+        target_calories = 2000
+        target_protein = 50
+        target_carbs = 250
+        target_fiber = 28
+        target_sugar = 50
+        target_sodium = 2300
+
+    # FoodLog.query.filter_by(user_id=current_user.id)
     # Calculate today's nutrition summary
     todays_food = FoodLog.query.filter(
         FoodLog.user_id == current_user.id,
-        cast(FoodLog.date, Date) == today
+        FoodLog.only_date == today
     ).all()
-    
+
+    print(1,todays_food)
+
     today_calories = sum(log.calories for log in todays_food)
     today_protein = sum(log.protein for log in todays_food)
     today_carbs = sum(log.carbohydrates for log in todays_food)
     today_fiber = sum(log.fiber for log in todays_food)
     today_sugar = sum(log.sugar for log in todays_food)
     today_sodium = sum(log.sodium for log in todays_food)
+
+    # Calculate percentages of daily targets
+    if target_calories > 0:
+        calories_percent = min(round((today_calories / target_calories) * 100), 100)
+    else:
+        calories_percent = 0
+        
+    if target_protein > 0:
+        protein_percent = min(round((today_protein / target_protein) * 100), 100)
+    else:
+        protein_percent = 0
+        
+    if target_carbs > 0:
+        carbs_percent = min(round((today_carbs / target_carbs) * 100), 100)
+    else:
+        carbs_percent = 0
+        
+    if target_fiber > 0:
+        fiber_percent = min(round((today_fiber / target_fiber) * 100), 100)
+    else:
+        fiber_percent = 0
     
     # Calculate today's exercise summary
+
     todays_exercise = ExerciseLog.query.filter(
         ExerciseLog.user_id == current_user.id,
-        cast(ExerciseLog.date, Date) == today
+        ExerciseLog.only_date == today
     ).all()
     
     today_calories_burned = sum(log.calories_burned for log in todays_exercise)
@@ -109,15 +176,17 @@ def dashboard():
     daily_calories = []
     daily_calories_burned = []
     daily_labels = []
+    daily_targets = []
     
     for i in range(7):
         day = today - timedelta(days=6-i)
         daily_labels.append(day.strftime('%a'))
+        daily_targets.append(target_calories)
         
         # Food calories for this day
         day_food = FoodLog.query.filter(
             FoodLog.user_id == current_user.id,
-            cast(FoodLog.date, Date) == day
+            FoodLog.only_date == day
         ).all()
         day_calories = sum(log.calories for log in day_food)
         daily_calories.append(day_calories)
@@ -125,7 +194,7 @@ def dashboard():
         # Exercise calories for this day
         day_exercise = ExerciseLog.query.filter(
             ExerciseLog.user_id == current_user.id,
-            cast(ExerciseLog.date, Date) == day
+            ExerciseLog.only_date == day
         ).all()
         day_calories_burned = sum(log.calories_burned for log in day_exercise)
         daily_calories_burned.append(day_calories_burned)
@@ -138,7 +207,8 @@ def dashboard():
     
     return render_template(
         'dashboard.html', 
-        form=form,
+        form=form_food,
+        exercise_form = form_exercise,
         today_calories=today_calories,
         today_protein=today_protein,
         today_carbs=today_carbs,
@@ -147,68 +217,102 @@ def dashboard():
         today_sodium=today_sodium,
         today_calories_burned=today_calories_burned,
         net_calories=today_calories - today_calories_burned,
+        target_calories=target_calories,
+        target_protein=target_protein,
+        target_carbs=target_carbs,
+        target_fiber=target_fiber,
+        target_sugar=target_sugar,
+        target_sodium=target_sodium,
+        calories_percent=calories_percent,
+        protein_percent=protein_percent,
+        carbs_percent=carbs_percent,
+        fiber_percent=fiber_percent,
         daily_labels=json.dumps(daily_labels),
         daily_calories=json.dumps(daily_calories),
         daily_calories_burned=json.dumps(daily_calories_burned),
+        daily_targets=json.dumps(daily_targets),
         recent_food_logs=recent_food_logs,
-        recent_exercise_logs=recent_exercise_logs
+        recent_exercise_logs=recent_exercise_logs,
+        has_complete_profile=user_has_complete_profile
     )
 
 # Natural language processing routes
 @app.route('/process_query', methods=['POST'])
 @login_required
-def process_query():
-    form = NaturalLanguageInputForm()
+def process_food_query():
+    form = NaturalLanguageInputForm_Food()
     if form.validate_on_submit():
         query = form.query.data
         
         # First try to process as a food query
-        food_result = nlp_processor.process_food_query(query, current_user.id)
-        
-        if food_result.get('result'):
-            # Add to food log
-            food_log = FoodLog(
-                user_id=current_user.id,
-                name=food_result['name'],
-                quantity=food_result['quantity'],
-                calories=food_result['calories'],
-                protein=food_result['protein'],
-                carbohydrates=food_result['carbohydrates'],
-                fiber=food_result['fiber'],
-                sugar=food_result['sugar'],
-                sodium=food_result['sodium'],
-                description=query
-            )
-            db.session.add(food_log)
-            db.session.commit()
-            
-            flash(f"Added {food_result['name']} with {food_result['calories']} calories to your food log!", 'success')
-            return redirect(url_for('dashboard'))
-        else:
-            # Try to process as an exercise query
-            exercise_result = nlp_processor.process_exercise_query(query)
-            
-            if exercise_result.get('result'):
-                # Add to exercise log
-                exercise_log = ExerciseLog(
+        food_results, missing  = nlp_processor.process_food_query(query, current_user.id)
+        print(missing, 111111)
+        print(food_results)
+        print(datetime.now(tz_ist), 11)
+        if food_results or missing:
+            for food_result in food_results:
+                # Add to food log
+                food_log = FoodLog(
                     user_id=current_user.id,
-                    name=exercise_result['name'],
-                    duration=exercise_result['duration'],
-                    calories_burned=exercise_result['calories_burned'],
+                    name=food_result['food'],
+                    quantity=100,
+                    calories=food_result['calories'],
+                    protein=food_result['protein'],
+                    carbohydrates=food_result['carbohydrates'],
+                    fiber=food_result['fiber'],
+                    sugar=food_result['sugar'],
+                    sodium=food_result['sodium'],
+                    date=datetime.now(tz_ist),
                     description=query
                 )
-                db.session.add(exercise_log)
+                db.session.add(food_log)
                 db.session.commit()
-                
-                flash(f"Added {exercise_result['name']} burning {exercise_result['calories_burned']} calories to your exercise log!", 'success')
-                return redirect(url_for('dashboard'))
-            else:
-                flash("Couldn't understand your input. Please try again with more details.", 'danger')
-                return redirect(url_for('dashboard'))
+                flash(f"Added {food_result['food']} with {food_result['calories']} calories to your food log!", 'success')
+            if missing:
+                for item in missing:
+                    flash(f"Couldn't find {item} in your food item database. Please add it to your food item database.", 'warning')
+
+            return redirect(url_for('dashboard'))
+        else:
+            flash("Couldn't understand your input. Please try again with more details.", 'danger')
+            return redirect(url_for('dashboard'))
     
     flash('Invalid form submission.', 'danger')
     return redirect(url_for('dashboard'))
 
+
+# for processing the exercise query
+@app.route('/process_exercise_query', methods=['POST'])
+@login_required
+def process_exercise_query():
+    form = NaturalLanguageInputForm_Exercise()
+    if form.validate_on_submit():
+        query = form.query.data
+        exercise_result = nlp_processor.process_exercise_query(user_input=query, gender=current_user.gender, weight=current_user.weight, height=current_user.height,age=current_user.age)
+        print(exercise_result)
+        if exercise_result:
+            # Add to exercise log
+            for exercise in exercise_result:
+                exercise_log = ExerciseLog(
+                        user_id=current_user.id,
+                        name=exercise['exercise'],
+                        duration=exercise['duration'],
+                        calories_burned=exercise['calories'],
+                        description=query
+                    )
+                db.session.add(exercise_log)
+                db.session.commit()
+
+                flash(
+                    f"Added {exercise['exercise']} burning {exercise['calories']} calories to your exercise log!",
+                    'success')
+            return redirect(url_for('dashboard'))
+        else:
+            flash("Couldn't understand your input. Please try again with more details.", 'danger')
+            return redirect(url_for('dashboard'))
+
+    flash('Invalid form submission.', 'danger')
+    return redirect(url_for('dashboard'))
 # Food item management routes
 @app.route('/food_items')
 @login_required
@@ -424,6 +528,34 @@ def add_meal_item(meal_id):
     
     return redirect(url_for('meals'))
 
+@app.route('/search_food_items')
+@login_required
+def search_food_items():
+    """API endpoint to search for food items by name"""
+    query = request.args.get('query', '')
+    if not query or len(query) < 2:
+        return jsonify([])
+    
+    items = CustomItem.query.filter(
+        CustomItem.user_id == current_user.id,
+        CustomItem.name.ilike(f'%{query}%')
+    ).limit(10).all()
+    
+    results = []
+    for item in items:
+        results.append({
+            'id': item.id,
+            'name': item.name,
+            'description': item.description,
+            'unit': item.unit,
+            'quantity': item.quantity,
+            'calories': item.calories,
+            'protein': item.protein,
+            'display': f"{item.name} ({item.quantity} {item.unit}) - {item.calories} cal"
+        })
+    
+    return jsonify(results)
+
 @app.route('/delete_meal_item/<int:meal_item_id>', methods=['POST'])
 @login_required
 def delete_meal_item(meal_item_id):
@@ -522,7 +654,7 @@ def chart_data():
     # Get date range parameters
     period = request.args.get('period', 'week')
     
-    today = datetime.now().date()
+    today = datetime.now(tz_ist).date()
     
     if period == 'week':
         days = 7
@@ -576,15 +708,15 @@ def chart_data():
         # Get food logs for the period
         food_logs = FoodLog.query.filter(
             FoodLog.user_id == current_user.id,
-            cast(FoodLog.date, Date) >= start_date,
-            cast(FoodLog.date, Date) <= today
+            FoodLog.only_date >= start_date,
+            FoodLog.only_date <= today
         ).all()
         
         # Get exercise logs for the period
         exercise_logs = ExerciseLog.query.filter(
             ExerciseLog.user_id == current_user.id,
-            cast(ExerciseLog.date, Date) >= start_date,
-            cast(ExerciseLog.date, Date) <= today
+            ExerciseLog.only_date >= start_date,
+            ExerciseLog.only_date <= today
         ).all()
         
         # Aggregate data by day
@@ -613,6 +745,489 @@ def chart_data():
 def page_not_found(e):
     return render_template('404.html'), 404
 
+@app.route('/daily')
+@login_required
+def daily_report():
+    """
+    Detailed daily report page showing nutrition and exercise data
+    """
+    # Get the requested date or default to today
+    date_param = request.args.get('date')
+    print(date_param)
+    if date_param:
+        try:
+            view_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+        except ValueError:
+            view_date = date.today()
+    else:
+        view_date = date.today()
+    print(view_date)
+    
+    # Calculate previous and next days for navigation
+    prev_date = view_date - timedelta(days=1)
+    next_date = view_date + timedelta(days=1)
+    if next_date > date.today():
+        next_date = None
+    
+    # Get user's calorie requirements and targets
+    user_has_complete_profile = all([
+        current_user.weight, 
+        current_user.height, 
+        current_user.age, 
+        current_user.gender, 
+        current_user.activity_level, 
+        current_user.motive
+    ])
+    
+    if user_has_complete_profile:
+        from nutrition_calculator import get_full_recommendations
+        recommendations = get_full_recommendations(current_user)
+        target_calories = recommendations['nutrition']['calories']
+        target_protein = recommendations['nutrition']['protein']
+        target_carbs = recommendations['nutrition']['carbs']
+        target_fiber = recommendations['nutrition']['fiber']
+        target_sugar = recommendations['nutrition']['sugar']
+        target_sodium = recommendations['nutrition']['sodium']
+    else:
+        # Default values if user hasn't completed their profile
+        target_calories = 2000
+        target_protein = 50
+        target_carbs = 250
+        target_fiber = 28
+        target_sugar = 50
+        target_sodium = 2300
+    
+    # Get all food logs for the specified date
+    food_logs = FoodLog.query.filter(
+        FoodLog.user_id == current_user.id,
+        FoodLog.only_date == view_date
+    ).order_by(FoodLog.date).all()
+    
+    # Get all exercise logs for the specified date
+    exercise_logs = ExerciseLog.query.filter(
+        ExerciseLog.user_id == current_user.id,
+        ExerciseLog.only_date == view_date
+    ).order_by(ExerciseLog.date).all()
+    
+    # Categorize food logs by meal type
+    breakfast_logs = [log for log in food_logs if log.meal_type == 'breakfast']
+    lunch_logs = [log for log in food_logs if log.meal_type == 'lunch']
+    dinner_logs = [log for log in food_logs if log.meal_type == 'dinner']
+    snack_logs = [log for log in food_logs if log.meal_type == 'snack']
+    other_logs = [log for log in food_logs if log.meal_type not in ['breakfast', 'lunch', 'dinner', 'snack'] or log.meal_type is None]
+    
+    # Calculate nutrition totals
+    total_calories = sum(log.calories for log in food_logs) if food_logs else 0
+    total_protein = sum(log.protein for log in food_logs) if food_logs else 0
+    total_carbs = sum(log.carbohydrates for log in food_logs) if food_logs else 0
+    total_fiber = sum(log.fiber for log in food_logs) if food_logs else 0
+    total_sugar = sum(log.sugar for log in food_logs) if food_logs else 0
+    total_sodium = sum(log.sodium for log in food_logs) if food_logs else 0
+    
+    # Calculate exercise totals
+    total_calories_burned = sum(log.calories_burned for log in exercise_logs) if exercise_logs else 0
+    total_minutes = sum(log.duration for log in exercise_logs) if exercise_logs else 0
+    
+    # Calculate percentages of daily targets and determine status colors
+    if target_calories > 0:
+        calories_percent = round((total_calories / target_calories) * 100)
+        calories_status = 'success' if calories_percent <= 105 else 'danger'
+    else:
+        calories_percent = 0
+        calories_status = 'secondary'
+        
+    if target_protein > 0:
+        protein_percent = round((total_protein / target_protein) * 100)
+        protein_status = 'success' if protein_percent >= 90 else 'warning'
+    else:
+        protein_percent = 0
+        protein_status = 'secondary'
+        
+    if target_carbs > 0:
+        carbs_percent = round((total_carbs / target_carbs) * 100)
+        carbs_status = 'success' if carbs_percent <= 110 else 'warning'
+    else:
+        carbs_percent = 0
+        carbs_status = 'secondary'
+        
+    if target_fiber > 0:
+        fiber_percent = round((total_fiber / target_fiber) * 100)
+        fiber_status = 'success' if fiber_percent >= 90 else 'warning'
+    else:
+        fiber_percent = 0
+        fiber_status = 'secondary'
+    
+    if target_sugar > 0:
+        sugar_percent = round((total_sugar / target_sugar) * 100)
+        sugar_status = 'success' if sugar_percent <= 100 else 'danger'
+    else:
+        sugar_percent = 0
+        sugar_status = 'secondary'
+        
+    if target_sodium > 0:
+        sodium_percent = round((total_sodium / target_sodium) * 100)
+        sodium_status = 'success' if sodium_percent <= 100 else 'danger'
+    else:
+        sodium_percent = 0
+        sodium_status = 'secondary'
+    
+    # Generate hourly calorie distribution for chart
+    hourly_data = [0] * 24
+    hourly_target = [target_calories / 24] * 24  # Distribute daily target evenly
+    for log in food_logs:
+        hour = log.date.hour
+        hourly_data[hour] += log.calories
+    
+    return render_template(
+        'daily_report.html',
+        date=view_date,
+        prev_date=prev_date,
+        next_date=next_date,
+        food_logs=food_logs,
+        exercise_logs=exercise_logs,
+        breakfast_logs=breakfast_logs,
+        lunch_logs=lunch_logs,
+        dinner_logs=dinner_logs,
+        snack_logs=snack_logs,
+        other_logs=other_logs,
+        total_calories=total_calories,
+        total_protein=total_protein,
+        total_carbs=total_carbs,
+        total_fiber=total_fiber,
+        total_sugar=total_sugar,
+        total_sodium=total_sodium,
+        total_calories_burned=total_calories_burned,
+        total_minutes=total_minutes,
+        net_calories=total_calories - total_calories_burned,
+        target_calories=target_calories,
+        target_protein=target_protein,
+        target_carbs=target_carbs,
+        target_fiber=target_fiber,
+        target_sugar=target_sugar,
+        target_sodium=target_sodium,
+        calories_percent=calories_percent,
+        calories_status=calories_status,
+        protein_percent=protein_percent,
+        protein_status=protein_status,
+        carbs_percent=carbs_percent,
+        carbs_status=carbs_status,
+        fiber_percent=fiber_percent,
+        fiber_status=fiber_status,
+        sugar_percent=sugar_percent,
+        sugar_status=sugar_status,
+        sodium_percent=sodium_percent,
+        sodium_status=sodium_status,
+        hourly_data=json.dumps(hourly_data),
+        hourly_target=json.dumps(hourly_target),
+        has_complete_profile=user_has_complete_profile
+    )
+
+@app.route('/weekly')
+@login_required
+def weekly_report():
+    """
+    Detailed weekly report page showing nutrition and exercise data
+    """
+    # Get start date parameter (default to start of current week)
+    date_str = request.args.get('start_date')
+    today = datetime.now(tz_ist).date()
+    
+    if date_str:
+        try:
+            start_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            # Default to start of current week (Monday)
+            start_date = today - timedelta(days=today.weekday())
+    else:
+        # Default to start of current week (Monday)
+        start_date = today - timedelta(days=today.weekday())
+    
+    # Calculate end date (start_date + 6 days = one week)
+    end_date = start_date + timedelta(days=6)
+    
+    # Get previous and next week for navigation
+    prev_week = start_date - timedelta(days=7)
+    next_week = start_date + timedelta(days=7)
+    
+    # Don't allow future weeks
+    if next_week > today:
+        next_week = None
+    
+    # Get nutrition data for the selected week
+    food_logs = FoodLog.query.filter(
+        FoodLog.user_id == current_user.id,
+        FoodLog.only_date >= start_date,
+        FoodLog.only_date <= end_date
+    ).order_by(FoodLog.date).all()
+    
+    # Get exercise data for the selected week
+    exercise_logs = ExerciseLog.query.filter(
+        ExerciseLog.user_id == current_user.id,
+        ExerciseLog.only_date >= start_date,
+        ExerciseLog.only_date <= end_date
+    ).order_by(ExerciseLog.date).all()
+    
+    # Calculate totals for the week
+    weekly_calories = sum(log.calories for log in food_logs)
+    weekly_protein = sum(log.protein for log in food_logs)
+    weekly_carbs = sum(log.carbohydrates for log in food_logs)
+    weekly_fiber = sum(log.fiber for log in food_logs)
+    weekly_sugar = sum(log.sugar for log in food_logs)
+    weekly_sodium = sum(log.sodium for log in food_logs)
+    
+    weekly_exercise_minutes = sum(log.duration for log in exercise_logs)
+    weekly_calories_burned = sum(log.calories_burned for log in exercise_logs)
+    
+    # Calculate net calories
+    weekly_net_calories = weekly_calories - weekly_calories_burned
+    
+    # Calculate daily breakdown for the week
+    days = []
+    daily_calories = []
+    daily_protein = []
+    daily_carbs = []
+    daily_exercise_minutes = []
+    daily_calories_burned = []
+    
+    for i in range(7):
+        day = start_date + timedelta(days=i)
+        days.append(day.strftime('%a'))
+        
+        # Get food logs for this day
+        day_food = [log for log in food_logs if log.date.date() == day]
+        day_calories = sum(log.calories for log in day_food)
+        day_protein = sum(log.protein for log in day_food)
+        day_carbs = sum(log.carbohydrates for log in day_food)
+        
+        # Get exercise logs for this day
+        day_exercise = [log for log in exercise_logs if log.date.date() == day]
+        day_exercise_minutes = sum(log.duration for log in day_exercise)
+        day_calories_burned = sum(log.calories_burned for log in day_exercise)
+        
+        daily_calories.append(day_calories)
+        daily_protein.append(day_protein)
+        daily_carbs.append(day_carbs)
+        daily_exercise_minutes.append(day_exercise_minutes)
+        daily_calories_burned.append(day_calories_burned)
+    
+    # Count total unique days with food logs
+    days_with_food = len(set(log.date.date() for log in food_logs))
+    
+    # Count total unique days with exercise logs
+    days_with_exercise = len(set(log.date.date() for log in exercise_logs))
+    
+    return render_template(
+        'weekly_report.html',
+        start_date=start_date,
+        end_date=end_date,
+        prev_week=prev_week,
+        next_week=next_week,
+        weekly_calories=weekly_calories,
+        weekly_protein=weekly_protein,
+        weekly_carbs=weekly_carbs,
+        weekly_fiber=weekly_fiber,
+        weekly_sugar=weekly_sugar,
+        weekly_sodium=weekly_sodium,
+        weekly_exercise_minutes=weekly_exercise_minutes,
+        weekly_calories_burned=weekly_calories_burned,
+        weekly_net_calories=weekly_net_calories,
+        days=days,
+        daily_calories=daily_calories,
+        daily_protein=daily_protein,
+        daily_carbs=daily_carbs,
+        daily_exercise_minutes=daily_exercise_minutes,
+        daily_calories_burned=daily_calories_burned,
+        days_with_food=days_with_food,
+        days_with_exercise=days_with_exercise,
+        food_logs=food_logs,
+        exercise_logs=exercise_logs,
+        timedelta=timedelta
+    )
+
+@app.route('/monthly')
+@login_required
+def monthly_report():
+    """
+    Detailed monthly report page showing nutrition and exercise data
+    """
+    # Get month and year parameters (default to current month)
+    month_str = request.args.get('month')
+    year_str = request.args.get('year')
+    today = datetime.now(tz_ist).date()
+    
+    if month_str and year_str:
+        try:
+            month = int(month_str)
+            year = int(year_str)
+            if month < 1 or month > 12:
+                month = today.month
+                year = today.year
+        except ValueError:
+            month = today.month
+            year = today.year
+    else:
+        month = today.month
+        year = today.year
+    
+    # Calculate start and end dates for the selected month
+    start_date = date(year, month, 1)
+    if month == 12:
+        end_date = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        end_date = date(year, month + 1, 1) - timedelta(days=1)
+    
+    # Calculate previous and next month for navigation
+    if month == 1:
+        prev_month = 12
+        prev_year = year - 1
+    else:
+        prev_month = month - 1
+        prev_year = year
+    
+    if month == 12:
+        next_month = 1
+        next_year = year + 1
+    else:
+        next_month = month + 1
+        next_year = year
+    
+    # Don't allow future months
+    if (next_year > today.year) or (next_year == today.year and next_month > today.month):
+        next_month = None
+        next_year = None
+    
+    # Get nutrition data for the selected month
+    food_logs = FoodLog.query.filter(
+        FoodLog.user_id == current_user.id,
+        FoodLog.only_date >= start_date,
+        FoodLog.only_date <= end_date
+    ).order_by(FoodLog.date).all()
+    
+    # Get exercise data for the selected month
+    exercise_logs = ExerciseLog.query.filter(
+        ExerciseLog.user_id == current_user.id,
+        ExerciseLog.only_date >= start_date,
+        ExerciseLog.only_date <= end_date
+    ).order_by(ExerciseLog.date).all()
+    
+    # Calculate totals for the month
+    monthly_calories = sum(log.calories for log in food_logs)
+    monthly_protein = sum(log.protein for log in food_logs)
+    monthly_carbs = sum(log.carbohydrates for log in food_logs)
+    monthly_fiber = sum(log.fiber for log in food_logs)
+    monthly_sugar = sum(log.sugar for log in food_logs)
+    monthly_sodium = sum(log.sodium for log in food_logs)
+    
+    monthly_exercise_minutes = sum(log.duration for log in exercise_logs)
+    monthly_calories_burned = sum(log.calories_burned for log in exercise_logs)
+    
+    # Calculate net calories
+    monthly_net_calories = monthly_calories - monthly_calories_burned
+    
+    # Calculate daily breakdown for charting
+    days_in_month = (end_date - start_date).days + 1
+    dates = []
+    daily_calories = []
+    daily_calories_burned = []
+    
+    for i in range(days_in_month):
+        day = start_date + timedelta(days=i)
+        dates.append(day.day)  # Just the day number
+        
+        # Get food logs for this day
+        day_food = [log for log in food_logs if log.date.date() == day]
+        day_calories = sum(log.calories for log in day_food)
+        
+        # Get exercise logs for this day
+        day_exercise = [log for log in exercise_logs if log.date.date() == day]
+        day_calories_burned = sum(log.calories_burned for log in day_exercise)
+        
+        daily_calories.append(day_calories)
+        daily_calories_burned.append(day_calories_burned)
+    
+    # Calculate weekly breakdown
+    weeks = []
+    weekly_breakdown = []
+    current_week = []
+    current_week_total = 0
+    
+    # Fill in days from previous month to start week on Monday
+    first_day_weekday = start_date.weekday()
+    if first_day_weekday > 0:
+        weeks.append("Week 1 (Partial)")
+    else:
+        weeks.append("Week 1")
+    
+    for i in range(days_in_month):
+        day = start_date + timedelta(days=i)
+        day_weekday = day.weekday()
+        
+        # Get food logs for this day
+        day_food = [log for log in food_logs if log.date.date() == day]
+        day_calories = sum(log.calories for log in day_food)
+        
+        if day_weekday == 0 and i > 0:  # Monday, start new week
+            weekly_breakdown.append(current_week_total)
+            current_week = []
+            current_week_total = 0
+            week_num = len(weekly_breakdown) + 1
+            if i + 7 > days_in_month:
+                weeks.append(f"Week {week_num} (Partial)")
+            else:
+                weeks.append(f"Week {week_num}")
+        
+        current_week_total += day_calories
+    
+    # Add the last week
+    weekly_breakdown.append(current_week_total)
+    
+    # Count days with logs
+    days_with_food = len(set(log.date.date() for log in food_logs))
+    days_with_exercise = len(set(log.date.date() for log in exercise_logs))
+    
+    # Calculate daily averages (only for days with data)
+    avg_daily_calories = monthly_calories / days_with_food if days_with_food > 0 else 0
+    avg_daily_protein = monthly_protein / days_with_food if days_with_food > 0 else 0
+    avg_daily_carbs = monthly_carbs / days_with_food if days_with_food > 0 else 0
+    avg_daily_exercise = monthly_exercise_minutes / days_with_exercise if days_with_exercise > 0 else 0
+    
+    return render_template(
+        'monthly_report.html',
+        month=month,
+        year=year,
+        month_name=date(year, month, 1).strftime('%B'),
+        start_date=start_date,
+        end_date=end_date,
+        prev_month=prev_month,
+        prev_year=prev_year,
+        next_month=next_month,
+        next_year=next_year,
+        monthly_calories=monthly_calories,
+        monthly_protein=monthly_protein,
+        monthly_carbs=monthly_carbs,
+        monthly_fiber=monthly_fiber,
+        monthly_sugar=monthly_sugar,
+        monthly_sodium=monthly_sodium,
+        monthly_exercise_minutes=monthly_exercise_minutes,
+        monthly_calories_burned=monthly_calories_burned,
+        monthly_net_calories=monthly_net_calories,
+        days_with_food=days_with_food,
+        days_with_exercise=days_with_exercise,
+        avg_daily_calories=avg_daily_calories,
+        avg_daily_protein=avg_daily_protein,
+        avg_daily_carbs=avg_daily_carbs,
+        avg_daily_exercise=avg_daily_exercise,
+        dates=dates,
+        daily_calories=daily_calories,
+        daily_calories_burned=daily_calories_burned,
+        weeks=weeks,
+        weekly_breakdown=weekly_breakdown,
+        food_logs=food_logs,
+        exercise_logs=exercise_logs,
+        timedelta=timedelta,
+        date=date
+    )
+
 @app.route('/compare')
 @login_required
 def compare():
@@ -632,10 +1247,10 @@ def compare():
     recommendations = get_full_recommendations(current_user)
     
     # Calculate today's nutrition summary
-    today = datetime.now().date()
+    today = datetime.now(tz_ist).date()
     todays_food = FoodLog.query.filter(
         FoodLog.user_id == current_user.id,
-        cast(FoodLog.date, Date) == today
+        FoodLog.only_date == today
     ).all()
     
     today_calories = sum(log.calories for log in todays_food)
@@ -648,7 +1263,7 @@ def compare():
     # Calculate today's exercise summary
     todays_exercise = ExerciseLog.query.filter(
         ExerciseLog.user_id == current_user.id,
-        cast(ExerciseLog.date, Date) == today
+        ExerciseLog.only_date == today
     ).all()
     
     today_exercise_minutes = sum(log.duration for log in todays_exercise)
@@ -659,8 +1274,8 @@ def compare():
     
     weekly_exercise = ExerciseLog.query.filter(
         ExerciseLog.user_id == current_user.id,
-        cast(ExerciseLog.date, Date) >= week_ago,
-        cast(ExerciseLog.date, Date) <= today
+        ExerciseLog.only_date >= week_ago,
+        ExerciseLog.only_date <= today
     ).all()
     
     weekly_exercise_minutes = sum(log.duration for log in weekly_exercise)

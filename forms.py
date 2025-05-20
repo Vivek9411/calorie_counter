@@ -48,8 +48,12 @@ class LoginForm(FlaskForm):
     password = PasswordField('Password', validators=[DataRequired()])
     submit = SubmitField('Login')
 
-class NaturalLanguageInputForm(FlaskForm):
-    query = TextAreaField('What did you eat or what exercise did you do?', validators=[DataRequired()])
+class NaturalLanguageInputForm_Food(FlaskForm):
+    query = TextAreaField('What did you eat?', validators=[DataRequired()])
+    submit = SubmitField('Process')
+
+class NaturalLanguageInputForm_Exercise(FlaskForm):
+    query = TextAreaField('what exercise did you do?', validators=[DataRequired()])
     submit = SubmitField('Process')
 
 class CustomItemForm(FlaskForm):

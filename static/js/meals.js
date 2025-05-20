@@ -4,6 +4,109 @@
  */
 
 document.addEventListener('DOMContentLoaded', function() {
+  // Setup food item search with autocomplete
+  const setupFoodSearch = () => {
+    const searchInputs = document.querySelectorAll('input[id^="food-search-"]');
+    
+    searchInputs.forEach(input => {
+      const mealId = input.id.split('-').pop();
+      const resultsDropdown = document.getElementById(`search-results-${mealId}`);
+      const hiddenSelect = input.closest('form').querySelector('select[name="custom_item_id"]');
+      const selectedFoodDiv = document.getElementById(`selected-food-${mealId}`);
+      const selectedFoodName = document.getElementById(`selected-food-name-${mealId}`);
+      const selectedFoodCalories = document.getElementById(`selected-food-calories-${mealId}`);
+      
+      // Debounce function to limit API calls
+      let debounceTimer;
+      const debounce = (callback, time) => {
+        window.clearTimeout(debounceTimer);
+        debounceTimer = window.setTimeout(callback, time);
+      };
+      
+      // Search food items via API
+      const searchFoodItems = (query) => {
+        fetch(`/search_food_items?query=${encodeURIComponent(query)}`)
+          .then(response => response.json())
+          .then(data => {
+            resultsDropdown.innerHTML = '';
+            
+            if (data.length === 0) {
+              const noResults = document.createElement('span');
+              noResults.className = 'dropdown-item text-muted';
+              noResults.textContent = 'No items found';
+              resultsDropdown.appendChild(noResults);
+            } else {
+              data.forEach(item => {
+                const option = document.createElement('a');
+                option.className = 'dropdown-item';
+                option.href = '#';
+                option.textContent = item.display;
+                option.dataset.id = item.id;
+                option.dataset.name = item.name;
+                option.dataset.calories = item.calories;
+                
+                option.addEventListener('click', (e) => {
+                  e.preventDefault();
+                  
+                  // Set the hidden select value
+                  hiddenSelect.value = item.id;
+                  
+                  // Update the input to show selected item
+                  input.value = item.name;
+                  
+                  // Show the selected food card
+                  selectedFoodDiv.classList.remove('d-none');
+                  selectedFoodName.textContent = item.name;
+                  selectedFoodCalories.textContent = `${item.calories} cal`;
+                  
+                  // Hide dropdown
+                  resultsDropdown.classList.remove('show');
+                });
+                
+                resultsDropdown.appendChild(option);
+              });
+            }
+            
+            // Show dropdown
+            resultsDropdown.classList.add('show');
+          })
+          .catch(error => {
+            console.error('Error searching food items:', error);
+          });
+      };
+      
+      // Handle input events
+      input.addEventListener('input', () => {
+        const query = input.value.trim();
+        
+        if (query.length < 2) {
+          resultsDropdown.classList.remove('show');
+          return;
+        }
+        
+        debounce(() => searchFoodItems(query), 300);
+      });
+      
+      // Hide dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!input.contains(e.target) && !resultsDropdown.contains(e.target)) {
+          resultsDropdown.classList.remove('show');
+        }
+      });
+      
+      // Handle focus
+      input.addEventListener('focus', () => {
+        const query = input.value.trim();
+        if (query.length >= 2) {
+          searchFoodItems(query);
+        }
+      });
+    });
+  };
+  
+  // Initialize food search
+  setupFoodSearch();
+  
   // Handle meal form submission
   const mealForm = document.querySelector('form[action="/add_meal"]');
   if (mealForm) {
@@ -40,13 +143,30 @@ document.addEventListener('DOMContentLoaded', function() {
     form.addEventListener('submit', function(e) {
       let isValid = true;
       
-      // Check select
+      // Check hidden select
       const foodItemSelect = this.querySelector('select[name="custom_item_id"]');
       if (foodItemSelect && (!foodItemSelect.value || foodItemSelect.value === '')) {
         isValid = false;
-        foodItemSelect.classList.add('is-invalid');
+        
+        // Get the associated search input
+        const searchInput = this.querySelector('input[id^="food-search-"]');
+        if (searchInput) {
+          searchInput.classList.add('is-invalid');
+          
+          // Add invalid feedback if not present
+          let feedback = searchInput.closest('.input-group').nextElementSibling;
+          if (!feedback || !feedback.classList.contains('invalid-feedback')) {
+            feedback = document.createElement('div');
+            feedback.className = 'invalid-feedback';
+            searchInput.closest('.input-group').parentNode.insertBefore(feedback, searchInput.closest('.input-group').nextSibling);
+          }
+          feedback.textContent = 'Please select a food item';
+        }
       } else if (foodItemSelect) {
-        foodItemSelect.classList.remove('is-invalid');
+        const searchInput = this.querySelector('input[id^="food-search-"]');
+        if (searchInput) {
+          searchInput.classList.remove('is-invalid');
+        }
       }
       
       // Check quantity

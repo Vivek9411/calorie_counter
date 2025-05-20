@@ -139,3 +139,42 @@
     font-size: 0.8rem;
   }
 }
+
+
+
+
+.flash-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1100;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .flash-message {
+            transition: all 0.4s ease;
+            transform: translateX(120%);
+            opacity: 0;
+            margin-bottom: 0.75rem;
+        }
+
+        .flash-message.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        .flash-progress {
+            height: 3px;
+            width: 100%;
+            background: rgba(255,255,255,0.3);
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            animation: progress 5s linear forwards;
+        }
+
+        @keyframes progress {
+            from { width: 100% }
+            to { width: 0% }
+        }

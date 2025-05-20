@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - HealthTracker{% endblock %}
+
+{% block extra_head %}
+<style>
+    .stat-card {
+        transition: transform 0.3s;
+    }
+    .stat-card:hover {
+        transform: translateY(-5px);
+    }
+    .card-icon {
+        font-size: 2rem;
+        margin-bottom: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="mb-4"><i class="fas fa-chart-line me-2"></i>Dashboard</h1>
+        
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <h3 class="mb-3">What did you eat or do today?</h3>
+                <form method="POST" action="{{ url_for('process_query') }}">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        {{ form.query(class="form-control form-control-lg", placeholder="e.g., 'I ate two apples' or 'I ran for 30 minutes'") }}
+                        <div class="form-text">
+                            Use natural language to describe what you ate or what exercise you did.
+                        </div>
+                    </div>
+                    <div class="d-grid">
+                        {{ form.submit(class="btn btn-primary btn-lg") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="mb-3">Today's Summary</h2>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-4">
+        <div class="card stat-card border-0 shadow-sm h-100">
+            <div class="card-body text-center p-4">
+                <i class="fas fa-fire card-icon text-primary"></i>
+                <h3 class="card-title h5">Calories In</h3>
+                <p class="display-6 fw-bold mb-0">{{ today_calories }}</p>
+                <p class="text-muted">calories</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-4">
+        <div class="card stat-card border-0 shadow-sm h-100">
+            <div class="card-body text-center p-4">
+                <i class="fas fa-running card-icon text-primary"></i>
+                <h3 class="card-title h5">Calories Burned</h3>
+                <p class="display-6 fw-bold mb-0">{{ today_calories_burned }}</p>
+                <p class="text-muted">calories</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-4">
+        <div class="card stat-card border-0 shadow-sm h-100">
+            <div class="card-body text-center p-4">
+                <i class="fas fa-balance-scale card-icon text-primary"></i>
+                <h3 class="card-title h5">Net Calories</h3>
+                <p class="display-6 fw-bold mb-0 {% if net_calories > 0 %}text-success{% else %}text-danger{% endif %}">{{ net_calories }}</p>
+                <p class="text-muted">calories</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-4">
+        <div class="card stat-card border-0 shadow-sm h-100">
+            <div class="card-body text-center p-4">
+                <i class="fas fa-drumstick-bite card-icon text-primary"></i>
+                <h3 class="card-title h5">Protein</h3>
+                <p class="display-6 fw-bold mb-0">{{ today_protein }}</p>
+                <p class="text-muted">grams</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6 mb-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header d-flex justify-content-between align-items-center bg-transparent py-3">
+                <h3 class="h5 mb-0"><i class="fas fa-chart-bar me-2"></i>Nutrition Breakdown</h3>
+            </div>
+            <div class="card-body p-3">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Carbohydrates: {{ today_carbs }}g</span>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar bg-primary" role="progressbar" style="width: {{ (today_carbs/300)*100 if today_carbs else 0 }}%;" aria-valuenow="{{ today_carbs }}" aria-valuemin="0" aria-valuemax="300"></div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Protein: {{ today_protein }}g</span>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: {{ (today_protein/100)*100 if today_protein else 0 }}%;" aria-valuenow="{{ today_protein }}" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Fiber: {{ today_fiber }}g</span>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar bg-info" role="progressbar" style="width: {{ (today_fiber/30)*100 if today_fiber else 0 }}%;" aria-valuenow="{{ today_fiber }}" aria-valuemin="0" aria-valuemax="30"></div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Sugar: {{ today_sugar }}g</span>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar bg-warning" role="progressbar" style="width: {{ (today_sugar/50)*100 if today_sugar else 0 }}%;" aria-valuenow="{{ today_sugar }}" aria-valuemin="0" aria-valuemax="50"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Sodium: {{ today_sodium }}mg</span>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar bg-danger" role="progressbar" style="width: {{ (today_sodium/2300)*100 if today_sodium else 0 }}%;" aria-valuenow="{{ today_sodium }}" aria-valuemin="0" aria-valuemax="2300"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-transparent py-3">
+                <ul class="nav nav-tabs card-header-tabs" id="chart-period-tab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="weekly-tab" data-bs-toggle="tab" data-bs-target="#weekly" type="button" role="tab" aria-controls="weekly" aria-selected="true">Weekly</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="monthly-tab" data-bs-toggle="tab" data-bs-target="#monthly" type="button" role="tab" aria-controls="monthly" aria-selected="false">Monthly</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="yearly-tab" data-bs-toggle="tab" data-bs-target="#yearly" type="button" role="tab" aria-controls="yearly" aria-selected="false">Yearly</button>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body p-3">
+                <div class="tab-content" id="chart-period-content">
+                    <div class="tab-pane fade show active" id="weekly" role="tabpanel" aria-labelledby="weekly-tab">
+                        <canvas id="weeklyChart" width="400" height="250"></canvas>
+                    </div>
+                    <div class="tab-pane fade" id="monthly" role="tabpanel" aria-labelledby="monthly-tab">
+                        <canvas id="monthlyChart" width="400" height="250"></canvas>
+                    </div>
+                    <div class="tab-pane fade" id="yearly" role="tabpanel" aria-labelledby="yearly-tab">
+                        <canvas id="yearlyChart" width="400" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent py-3">
+                <h3 class="h5 mb-0"><i class="fas fa-utensils me-2"></i>Recent Food Logs</h3>
+            </div>
+            <div class="card-body p-0">
+                {% if recent_food_logs %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Food</th>
+                                    <th>Calories</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in recent_food_logs %}
+                                <tr>
+                                    <td>{{ log.name }}</td>
+                                    <td>{{ log.calories }}</td>
+                                    <td>{{ log.date.strftime('%b %d, %Y %I:%M %p') }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center p-4">
+                        <p class="mb-0 text-muted">No food logs yet. Start tracking what you eat!</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent py-3">
+                <h3 class="h5 mb-0"><i class="fas fa-running me-2"></i>Recent Exercise Logs</h3>
+            </div>
+            <div class="card-body p-0">
+                {% if recent_exercise_logs %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Exercise</th>
+                                    <th>Duration</th>
+                                    <th>Calories Burned</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in recent_exercise_logs %}
+                                <tr>
+                                    <td>{{ log.name }}</td>
+                                    <td>{{ log.duration }} min</td>
+                                    <td>{{ log.calories_burned }}</td>
+                                    <td>{{ log.date.strftime('%b %d, %Y %I:%M %p') }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center p-4">
+                        <p class="mb-0 text-muted">No exercise logs yet. Start tracking your workouts!</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/chart_utils.js') }}"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<script>
+    // Initial chart data
+    const dailyLabels = {{ daily_labels|safe }};
+    const dailyCalories = {{ daily_calories|safe }};
+    const dailyCaloriesBurned = {{ daily_calories_burned|safe }};
+    
+    // Initialize the weekly chart with the data passed from Flask
+    document.addEventListener('DOMContentLoaded', function() {
+        initWeeklyChart(dailyLabels, dailyCalories, dailyCaloriesBurned);
+        
+        // Load monthly and yearly data when their tabs are clicked
+        document.getElementById('monthly-tab').addEventListener('click', function() {
+            if (!window.monthlyChartInitialized) {
+                loadChartData('month');
+                window.monthlyChartInitialized = true;
+            }
+        });
+        
+        document.getElementById('yearly-tab').addEventListener('click', function() {
+            if (!window.yearlyChartInitialized) {
+                loadChartData('year');
+                window.yearlyChartInitialized = true;
+            }
+        });
+    });
+</script>
+{% endblock %}
